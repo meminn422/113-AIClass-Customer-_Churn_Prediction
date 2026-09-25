@@ -1,84 +1,150 @@
 # 客戶流失預測報告書
 
-## 一、專題背景說明
+人工智慧課程專題（113 學年度）
 
-### 為什麼客戶流失預測很重要
-客戶流失預測能幫助企業提前識別可能會流失的顧客，進而可以主動採取行動去挽留客戶。預測技術提供了一種預防式經營方式，使企業能夠在客戶仍有挽回空間時介入。
+| 姓名 | 學號 | 分工 |
+|---|---|---|
+| 金蔓均 | 111119045 | 程式 |
+| 李恩亞 | 111119042 | 企劃書 |
+| 吳采伃 | 111119043 | 企劃書 |
 
-### 實際應用場景
-
-#### 1. 電信產業
-- **數據來源：** 通話紀錄、流量使用趨勢、資費變動紀錄、退租頁面瀏覽紀錄等。
-- **應用：** 預測跳槽風險，推送優惠續約方案，優先處理高風險客戶來電。
-
-#### 2. 訂閱服務
-- **數據來源：** 登入頻率、觀看時長、喜好內容、取消訂閱時間點與原因。
-- **應用：** 預測潛在流失者、優化推薦內容、對試用期用戶推送優惠。
-
-#### 3. 金融科技
-- **數據來源：** 存款、轉帳、交易頻率、App 開啟次數與功能使用分布。
-- **應用：** 預測低使用率帳戶、推播金流優惠、推薦理財商品。
+> 本報告所有數字均取自 `customer_analy.ipynb` 的執行輸出，每張表與每張圖下方標示對應的儲存格編號（由上往下計算）。
 
 ---
 
-## 二、資料描述與處理方式
+## 一、專題背景
 
-- **資料集：** `churn-bigml-80.csv` (2666 筆)、`churn-bigml-20.csv` (667 筆)
-- **欄位數：** 20 欄
-- **缺失值處理：** 無缺失值，無需補值。
+電信業者若能在客戶實際流失前辨識出高風險名單，就能在客戶仍有挽回空間時介入，例如提供續約方案或優先處理其客服需求。本專題使用電信客戶資料集 churn-bigml，比較四種分類模型預測客戶是否流失的表現，並以獨立測試集評估最終模型。
 
-### 類別變數轉換
-| 原欄位 | 原始值 | 數值轉換後 |
-| ------ | ------ | -------- |
+## 二、資料描述
+
+| 項目 | 內容 | 來源 |
+|---|---|---|
+| 訓練資料 | churn-bigml-80.csv，2,666 筆，20 欄 | 第 2 個儲存格 |
+| 測試資料 | churn-bigml-20.csv，667 筆，20 欄 | 第 2、20 個儲存格 |
+| 缺失值 | 全部欄位皆無缺失值 | 第 1 個儲存格 |
+| 測試資料組成 | 流失 95 筆，未流失 572 筆 | 第 21 個儲存格（混淆矩陣） |
+
+測試資料全程未參與模型訓練與參數調整，只用於最終評估。
+
+## 三、資料前處理與特徵工程
+
+程式碼來源為第 13 個儲存格（訓練資料）與第 18 個儲存格（測試資料）。
+
+**類別欄位轉換**
+
+| 欄位 | 原始值 | 轉換後 |
+|---|---|---|
 | International plan | Yes / No | 1 / 0 |
 | Voice mail plan | Yes / No | 1 / 0 |
 | Churn | True / False | 1 / 0 |
 
-### 特徵選擇與新增特徵
-- **移除欄位：** State, Area code
-- **新增欄位：**
-  - `many_service_calls`: 客服次數超過 3 次
-  - `no_voicemail_usage`: 語音留言數量為 0
-  - `avg_call_duration_day`: 日通話平均時長
-  - `high_usage`: 日通話分鐘數是否高於平均
+**移除欄位** State、Area code
 
----
+**新增衍生特徵**
 
-## 三、模型建立與參數設定
+| 欄位 | 程式中的定義 |
+|---|---|
+| many_service_calls | 客服通話次數大於 3 次為 1，否則為 0 |
+| no_voicemail_usage | 未申辦語音信箱且語音留言數為 0 時為 1 |
+| avg_call_duration_day | 白天通話總分鐘數除以白天通話次數 |
+| high_usage | 白天通話分鐘數高於訓練資料平均時為 1 |
 
-| 模型 | 主要參數 | 說明 |
-| ---- | -------- | ---- |
-| Logistic Regression | max_iter=1000 | 防止迭代不足導致未收斂 |
-| KNN | n_neighbors=5 | 常見預設值，可平衡擬合度 |
-| Random Forest | n_estimators=100, random_state=42 | 增加樹數提升穩定性 |
-| XGBoost | use_label_encoder=False, eval_metric='logloss' | 關閉 label encoder，指定對數損失 |
+**標準化** 以 StandardScaler 處理 8 個連續欄位，包括 Account length、Number vmail messages、Total day minutes、Total eve minutes、Total night minutes、Total intl minutes、Customer service calls、avg_call_duration_day。測試資料使用訓練資料擬合的 scaler 轉換，high_usage 的門檻也使用訓練資料平均，避免測試資訊影響訓練。
 
----
+## 四、模型比較（驗證階段）
 
-## 四、模型比較與分析
+將 churn-bigml-80.csv 以 8 比 2 切分為訓練與驗證資料（random_state=42），比較四種模型。
+
+| 模型 | 主要參數 |
+|---|---|
+| Logistic Regression | max_iter=1000 |
+| K-Nearest Neighbors | n_neighbors=5 |
+| Random Forest | n_estimators=100, random_state=42 |
+| XGBoost | eval_metric='logloss', random_state=42 |
+
+**表一 驗證資料評估結果**
 
 | 模型 | Accuracy | Precision | Recall | F1-score | ROC AUC |
-| ---- | -------- | --------- | ------ | -------- | ------- |
-| Logistic Regression | 0.87 | 0.74 | 0.60 | 0.66 | 0.85 |
-| KNN | 0.84 | 0.60 | 0.51 | 0.55 | 0.60 |
-| Random Forest | 0.94 | 0.92 | 0.75 | 0.83 | 0.87 |
-| XGBoost | 0.95 | 0.94 | 0.79 | 0.86 | 0.90 |
+|---|---|---|---|---|---|
+| Logistic Regression | 0.875 | 0.650 | 0.329 | 0.437 | 0.841 |
+| K-Nearest Neighbors | 0.848 | 0.417 | 0.063 | 0.110 | 0.606 |
+| Random Forest | 0.948 | 0.964 | 0.671 | 0.791 | 0.914 |
+| XGBoost | 0.953 | 0.950 | 0.722 | 0.820 | 0.901 |
 
-**結論：** XGBoost 在各項指標中均表現最佳，特別是在 Recall 和 AUC 上顯著優於其他模型。
+<sub>資料來源 customer_analy.ipynb 第 13 個儲存格輸出，數值四捨五入至小數第三位。</sub>
 
----
+作為對照，未加入衍生特徵時 XGBoost 的驗證 AUC 為 0.896（第 12 個儲存格輸出），加入後為 0.901。
 
-## 五、改進建議
+## 五、超參數調整
 
-- **資料不平衡處理：** 使用 SMOTE 或 `class_weight='balanced'`
-- **模型解釋性提升：** 引入 SHAP 分析、生成客戶等級報表。
-- **特徵擴充：** 增加「客服聯絡內容」、「資費變更紀錄」等行為數據。
-- **模型部署考量：** 定期 retrain、建立 alert 系統、確保預測解釋性。
+以 GridSearchCV 對 XGBoost 進行 5 折交叉驗證，評分標準為 ROC AUC，使用全部 churn-bigml-80.csv 資料。
 
----
+| 參數 | 搜尋範圍 | 最佳值 |
+|---|---|---|
+| max_depth | 3, 5, 7 | 5 |
+| learning_rate | 0.01, 0.1, 0.2 | 0.2 |
+| n_estimators | 100, 200 | 100 |
+| subsample | 0.8, 1.0 | 1.0 |
 
-## 六、專案資源連結
+共 36 組參數、180 次訓練，最佳組合的交叉驗證平均 AUC 為 **0.922**。
 
-- GitHub Repo: [113-AIClass-Customer_Churn_Prediction](https://github.com/meminn422/113-AIClass-Customer-_Churn_Prediction)
-- Google Colab: [完整模型訓練程式碼](https://drive.google.com/file/d/1WUCK0DkmD7gosCeTKV6BxV3yLo0zukix/view?usp=sharing)
-- GridSearchCV: [超參數調整程式碼](https://colab.research.google.com/drive/1s0YHZYMCGiUua165rojGPLVUNniCd6fR?usp=sharing)
+<sub>資料來源 customer_analy.ipynb 第 16、17 個儲存格輸出。</sub>
+
+## 六、最終測試結果
+
+以最佳參數的 XGBoost 預測獨立測試資料 churn-bigml-20.csv（667 筆）。
+
+**表二 獨立測試集評估結果**
+
+| Accuracy | Precision | Recall | F1-score | ROC AUC |
+|---|---|---|---|---|
+| 0.9610 | 0.9726 | 0.7474 | 0.8452 | 0.9135 |
+
+**表三 混淆矩陣**
+
+| | 預測未流失 | 預測流失 |
+|---|---|---|
+| 實際未流失（572） | 570 | 2 |
+| 實際流失（95） | 24 | 71 |
+
+<sub>資料來源 customer_analy.ipynb 第 21 個儲存格輸出。</sub>
+
+![最終測試集 ROC 曲線](figures/roc_final_test.png)
+
+<sub>圖一 最終測試集 ROC 曲線，資料來源第 21 個儲存格輸出。</sub>
+
+## 七、結論
+
+1. 最終模型在獨立測試集的 AUC 為 0.914。95 位流失客戶中辨識出 71 位，572 位未流失客戶中只有 2 位被誤判為流失。
+2. 模型判定為流失時幾乎都正確（Precision 0.973），但仍有 24 位、約四分之一的流失客戶未被辨識。若用於實際挽留，漏抓的客戶代表直接的營收損失，這是下一步最需要改善的地方。
+3. 特徵重要性顯示，XGBoost 排名前三為 International plan、Customer service calls、Voice mail plan；Random Forest 排名前三為 Total day minutes、Total day charge、International plan。兩個模型都將是否申辦國際方案列入前三。
+4. 四項衍生特徵的效果有限。XGBoost 對 high_usage、many_service_calls、no_voicemail_usage 的重要性為 0；Random Forest 中 avg_call_duration_day 與 many_service_calls 位於中段。加入衍生特徵後，XGBoost 驗證 AUC 僅由 0.896 提升至 0.901。
+5. KNN 在四個模型中表現最弱，驗證 Recall 僅 0.063。
+
+![Random Forest 特徵重要性](figures/importance_rf.png)
+
+![XGBoost 特徵重要性](figures/importance_xgb.png)
+
+<sub>圖二、圖三 特徵重要性，資料來源第 13 個儲存格輸出。此為驗證階段、尚未調參的模型。</sub>
+
+## 八、限制
+
+1. **Logistic Regression 未收斂**。即使設定 max_iter=1000，第 13 個儲存格仍出現未收斂警告，其驗證結果可能低估此模型的表現。
+2. **部分欄位未標準化**。calls 與 charge 系列欄位未納入標準化，對 KNN 這類依賴距離計算的模型可能有影響，本專題未進一步驗證。
+3. **驗證階段的標準化時機**。第 12、13 個儲存格在切分訓練與驗證資料前擬合 scaler，驗證指標可能略為樂觀。最終測試集的流程不受此影響。
+4. **未處理類別不平衡**，且參數調整以 AUC 為標準，未針對 Recall 最佳化。
+5. **特徵重要性來自未調參模型**，不一定與最終模型完全一致。
+
+## 九、未來改進方向（尚未實作）
+
+1. 以 SMOTE 或 class_weight='balanced' 處理類別不平衡，並比較 Recall 的變化。
+2. 調整分類門檻，或改以 Recall、F1 作為調參標準。
+3. 引入 SHAP 分析個別客戶的預測原因，提供營運端參考。
+4. 將所有連續欄位納入標準化，並把 scaler 移到資料切分之後。
+
+## 十、原始碼
+
+1. GitHub https://github.com/meminn422/113-AIClass-Customer-_Churn_Prediction.git
+2. Google Colab（完整程式）https://drive.google.com/file/d/1WUCK0DkmD7gosCeTKV6BxV3yLo0zukix/view?usp=sharing
+3. Google Colab（GridSearchCV）https://colab.research.google.com/drive/1s0YHZYMCGiUua165rojGPLVUNniCd6fR?usp=sharing
